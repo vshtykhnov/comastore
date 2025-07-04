@@ -1,0 +1,1 @@
+{"file_name": "pages/page0001.png", "ground_truth": {"offers": [{"name": "test", "promo_type": "percent_discount", "new": 10.0, "old": 20.0, "discount_pct": 50}], "valid_from": "2024-07-01", "valid_to": "2024-07-10"}}
