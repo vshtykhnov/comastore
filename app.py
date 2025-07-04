@@ -32,12 +32,9 @@ def collate_fn(processor, batch):
 def train(args):
     processor = DonutProcessor.from_pretrained('naver-clova-ix/donut-base')
     model = VisionEncoderDecoderModel.from_pretrained('naver-clova-ix/donut-base')
-    # ensure generation works even if the pretrained config is missing the start token id
-    if model.config.decoder_start_token_id is None:
-        bos = getattr(model.config, 'bos_token_id', None)
-        if bos is None and hasattr(processor.tokenizer, 'bos_token_id'):
-            bos = processor.tokenizer.bos_token_id
-        model.config.decoder_start_token_id = bos
+
+    model.config.pad_token_id = processor.tokenizer.pad_token_id
+    model.config.decoder_start_token_id = processor.tokenizer.convert_tokens_to_ids("[s]")
 
     train_data = Dataset.from_list(load_jsonl(args.train))
     val_data = Dataset.from_list(load_jsonl(args.val))
@@ -55,7 +52,8 @@ def train(args):
         fp16=torch.cuda.is_available(),
         logging_steps=10,
         save_steps=500,
-        remove_unused_columns=False
+        remove_unused_columns=False,
+        report_to=None
     )
 
     trainer = Trainer(
@@ -86,6 +84,7 @@ def parse(args):
         with torch.no_grad():
             generated = model.generate(inputs, max_length=512)
         json_str = processor.batch_decode(generated, skip_special_tokens=True)[0]
+        print('RAW:', json_str)        # <- добавьте эту строку для отладки
         data = json.loads(json_str)
         valid_from = data.get('valid_from') or data.get('ground_truth', {}).get('valid_from')
         valid_to = data.get('valid_to') or data.get('ground_truth', {}).get('valid_to')
