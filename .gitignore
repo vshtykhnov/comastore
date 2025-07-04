@@ -6,7 +6,6 @@ __pycache__/
 # C extensions
 *.so
 raw_pdf/*
-pages/*
 
 # Distribution / packaging
 .Python
