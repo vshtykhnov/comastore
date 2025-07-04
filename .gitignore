@@ -5,8 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
-raw_pdf/*
 
+./donut_out/*
 # Distribution / packaging
 .Python
 build/

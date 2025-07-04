@@ -36,6 +36,9 @@ def train(args):
     model.config.pad_token_id = processor.tokenizer.pad_token_id
     model.config.decoder_start_token_id = processor.tokenizer.convert_tokens_to_ids("[s]")
 
+    # Enable gradient checkpointing to reduce memory usage
+    model.gradient_checkpointing_enable()
+
     train_data = Dataset.from_list(load_jsonl(args.train))
     val_data = Dataset.from_list(load_jsonl(args.val))
 
@@ -47,7 +50,7 @@ def train(args):
     training_args = TrainingArguments(
         output_dir=args.out,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=8,
+        gradient_accumulation_steps=1,
         num_train_epochs=args.epochs,
         fp16=torch.cuda.is_available(),
         logging_steps=10,
