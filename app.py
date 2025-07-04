@@ -32,6 +32,12 @@ def collate_fn(processor, batch):
 def train(args):
     processor = DonutProcessor.from_pretrained('naver-clova-ix/donut-base')
     model = VisionEncoderDecoderModel.from_pretrained('naver-clova-ix/donut-base')
+    # ensure generation works even if the pretrained config is missing the start token id
+    if model.config.decoder_start_token_id is None:
+        bos = getattr(model.config, 'bos_token_id', None)
+        if bos is None and hasattr(processor.tokenizer, 'bos_token_id'):
+            bos = processor.tokenizer.bos_token_id
+        model.config.decoder_start_token_id = bos
 
     train_data = Dataset.from_list(load_jsonl(args.train))
     val_data = Dataset.from_list(load_jsonl(args.val))
