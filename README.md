@@ -23,7 +23,12 @@ Simple tools to prepare a dataset, train a YOLOv8 model and run predictions.
    ```
    If `--weights` is not specified, the latest weights from `runs/train/` are used.
 
-6. Evaluate on the test split
+6. Export detected products as cropped images
+   ```bash
+   python pipeline.py cards path/to/images --out cards/
+   ```
+
+7. Evaluate on the test split
    ```bash
    python pipeline.py test
    ```
