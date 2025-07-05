@@ -99,7 +99,7 @@ def main() -> None:
         gradient_accumulation_steps=4,
         per_device_eval_batch_size=1,
         predict_with_generate=True,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         logging_steps=100,
         save_strategy="epoch",
         load_best_model_at_end=True,
