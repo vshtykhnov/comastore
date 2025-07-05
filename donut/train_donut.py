@@ -55,7 +55,7 @@ def main() -> None:
     batch_size = 4
     lr = 5e-5
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "0" if torch.cuda.is_available() else "cpu"
 
     processor = DonutProcessor.from_pretrained(model_name)
     model = VisionEncoderDecoderModel.from_pretrained(model_name).to(device)
