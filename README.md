@@ -13,11 +13,12 @@ pip install -r requirements.txt
 
 ## YOLO Usage
 
-1. Put your images in `images/` and matching YOLO labels in `labels/`.
+1. Put your images in `yolo/images/` and matching YOLO labels in `yolo/labels/`.
 2. Create the dataset structure:
    ```bash
    python yolo/pipeline.py prepare
    ```
+   The dataset will be stored in `yolo/dataset/`.
 3. Train the model:
    ```bash
    python yolo/pipeline.py train --model yolov8n.pt --epochs 50
@@ -26,7 +27,7 @@ pip install -r requirements.txt
    ```bash
    python yolo/pipeline.py predict path/to/image.jpg
    ```
-   If `--weights` is not specified, the latest weights from `runs/train/` are used.
+   If `--weights` is not specified, the latest weights from `yolo/runs/` are used.
 5. Export detected products as cropped images:
    ```bash
    python yolo/pipeline.py cards path/to/images --out cards/
