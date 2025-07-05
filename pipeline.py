@@ -121,7 +121,8 @@ def test_model(data: Path, weights: Path | None, imgsz: int, device: str) -> Non
     metrics = yolo.val(data=str(data), split="test", imgsz=imgsz, device=device, save=True)
     if hasattr(metrics, "save_dir"):
         print(f"Results saved to {metrics.save_dir}")
-    print(metrics)
+    print("mAP50-95:", metrics.box.map)
+    print("mAP50:", metrics.box.map50)
 
 
 def main() -> None:
