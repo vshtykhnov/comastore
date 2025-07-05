@@ -12,14 +12,12 @@ from transformers import (
     VisionEncoderDecoderModel,
     Seq2SeqTrainingArguments,
     Seq2SeqTrainer,
-    DataCollatorForSeq2Seq,
 )
 
 TASK_PROMPT = "<s_serialize>"
 
 class DonutDataset(Dataset):
-    """Simple dataset reading images and JSON ground truth."""
-
+    """Reads images and JSON ground truth and returns pixel values + labels."""
     def __init__(
         self,
         images_dir: str | Path,
@@ -31,18 +29,21 @@ class DonutDataset(Dataset):
         self.gts: Dict[str, Path] = {p.stem: p for p in Path(gt_dir).glob("*.json*")}
         self.processor = processor
         self.max_length = max_length
+        self.eos_token = processor.tokenizer.eos_token
 
     def __len__(self) -> int:
         return len(self.images)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         img_path = self.images[idx]
-        with open(self.gts[img_path.stem], encoding="utf-8") as f:
-            gt = json.load(f)
-        text = TASK_PROMPT + json.dumps(gt, ensure_ascii=False) + self.processor.tokenizer.eos_token
+        gt_path = self.gts[img_path.stem]
+        gt = json.loads(gt_path.read_text(encoding="utf-8"))
+
+        # build text with prompt and eos
+        text = TASK_PROMPT + json.dumps(gt, ensure_ascii=False) + self.eos_token
 
         image = Image.open(img_path).convert("RGB")
-        data = self.processor(
+        enc = self.processor(
             images=image,
             text=text,
             return_tensors="pt",
@@ -50,22 +51,37 @@ class DonutDataset(Dataset):
             truncation=True,
             max_length=self.max_length,
         )
-        return {k: v.squeeze(0) for k, v in data.items()}
+
+        # enc contains 'pixel_values', 'input_ids', 'attention_mask'...
+        # we only need pixel_values and labels=input_ids
+        pixel_values = enc.pixel_values.squeeze(0)
+        labels = enc.input_ids.squeeze(0)
+        return {"pixel_values": pixel_values, "labels": labels}
+
+
+def collate_fn(batch: list[dict]) -> dict:
+    """Stack pixel_values and labels, mask padding tokens."""
+    pixel_values = torch.stack([b["pixel_values"] for b in batch])
+    labels       = torch.stack([b["labels"]       for b in batch])
+    # mask pad tokens
+    pad_id = dataset.processor.tokenizer.pad_token_id
+    labels = labels.masked_fill(labels == pad_id, -100)
+    return {"pixel_values": pixel_values, "labels": labels}
 
 
 def main() -> None:
     train_images = "donut_dataset/images/train"
-    train_gts   = "donut_dataset/ground_truth/train"
-    val_images  = "donut_dataset/images/val"
-    val_gts     = "donut_dataset/ground_truth/val"
-    output_dir  = "donut_finetuned"
-    model_name  = "naver-clova-ix/donut-base"
-    max_epochs  = 7
-    lr          = 1e-5
+    train_gts    = "donut_dataset/ground_truth/train"
+    val_images   = "donut_dataset/images/val"
+    val_gts      = "donut_dataset/ground_truth/val"
+    output_dir   = "donut_finetuned"
+    model_name   = "naver-clova-ix/donut-base"
+    max_epochs   = 7
+    lr           = 1e-5
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Load processor and model
+    # load processor & model
     processor = DonutProcessor.from_pretrained(model_name)
     processor.tokenizer.model_max_length = 128
 
@@ -75,25 +91,18 @@ def main() -> None:
     model.config.eos_token_id           = processor.tokenizer.eos_token_id
     model.gradient_checkpointing_enable()
 
-    # Prepare datasets
+    # prepare datasets
     train_ds = DonutDataset(train_images, train_gts, processor)
     val_ds   = DonutDataset(val_images, val_gts, processor)
 
-    # Use built-in collator that pads and masks correctly
-    data_collator = DataCollatorForSeq2Seq(
-        tokenizer=processor.tokenizer,
-        model=model,
-        label_pad_token_id=-100,
-    )
-
-    # Training arguments
+    # training arguments
     training_args = Seq2SeqTrainingArguments(
         output_dir=output_dir,
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,
         per_device_eval_batch_size=1,
         predict_with_generate=True,
-        eval_strategy="epoch",
+        evaluation_strategy="epoch",
         logging_steps=100,
         save_strategy="epoch",
         load_best_model_at_end=True,
@@ -105,13 +114,13 @@ def main() -> None:
 
     torch.cuda.empty_cache()
 
-    # Trainer
+    # trainer
     trainer = Seq2SeqTrainer(
         model=model,
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        data_collator=data_collator,
+        data_collator=collate_fn,
         tokenizer=processor.tokenizer,
     )
 
