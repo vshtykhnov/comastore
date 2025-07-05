@@ -6,6 +6,7 @@ from typing import Dict
 from PIL import Image
 
 import torch
+
 from torch.utils.data import Dataset
 
 from transformers import (
@@ -74,6 +75,8 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     processor = DonutProcessor.from_pretrained(model_name)
+    processor.tokenizer.model_max_length = 128
+
     model = VisionEncoderDecoderModel.from_pretrained(model_name).to(device)
 
     train_ds = DonutDataset(train_images, train_gts, processor)
@@ -81,7 +84,7 @@ def main() -> None:
 
     training_args = Seq2SeqTrainingArguments(
         output_dir=output_dir,
-        per_device_eval_batch_size=batch_size,
+        per_device_eval_batch_size=1,
         predict_with_generate=True,
         eval_strategy="epoch",
         logging_steps=100,
@@ -91,8 +94,10 @@ def main() -> None:
         fp16=torch.cuda.is_available(),
         remove_unused_columns=False,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=1,
+        gradient_accumulation_steps=4,
     )
+
+    torch.cuda.empty_cache()
 
     data_collator = donut_collate_fn
 
