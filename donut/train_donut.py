@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Dict
+from PIL import Image
 
 import torch
 from torch.utils.data import Dataset
@@ -12,36 +13,40 @@ from transformers import (
     VisionEncoderDecoderModel,
     Seq2SeqTrainingArguments,
     Seq2SeqTrainer,
+    DataCollatorForSeq2Seq,
 )
 
 
 class DonutDataset(Dataset):
     """Simple dataset reading images and JSON ground truth."""
 
-    def __init__(self, images_dir: str | Path, gt_dir: str | Path, processor: DonutProcessor) -> None:
+    def __init__(self, images_dir: str | Path, gt_dir: str | Path, processor: DonutProcessor, max_length: int = 512) -> None:
         self.images = sorted(Path(images_dir).glob("*"))
-        self.gts: Dict[str, Path] = {p.stem: p for p in Path(gt_dir).glob("*.json")}
+        self.gts: Dict[str, Path] = {}
+        for p in Path(gt_dir).glob("*.json*"):
+            self.gts[p.stem] = p
         self.processor = processor
+        self.max_length = max_length
 
     def __len__(self) -> int:
         return len(self.images)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         img_path = self.images[idx]
-        data = self.processor(images=img_path, return_tensors="pt")
         key = img_path.stem
         with open(self.gts[key], encoding="utf-8") as f:
             gt = json.load(f)
         target_str = json.dumps(gt, ensure_ascii=False)
-        labels = self.processor.tokenizer(target_str, add_special_tokens=False, return_tensors="pt")
-        input_ids = data["input_ids"].squeeze()
-        pixel_values = data["pixel_values"].squeeze()
-        labels_ids = labels["input_ids"].squeeze()
-        return {
-            "pixel_values": pixel_values,
-            "labels": labels_ids,
-            "attention_mask": input_ids.bool(),
-        }
+        image = Image.open(img_path).convert("RGB")
+        data = self.processor(
+            images=image,
+            text=target_str,
+            return_tensors="pt",
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_length,
+        )
+        return {k: v.squeeze(0) for k, v in data.items()}
 
 
 def main() -> None:
@@ -77,17 +82,15 @@ def main() -> None:
         remove_unused_columns=False,
     )
 
+    data_collator = DataCollatorForSeq2Seq(tokenizer=processor.tokenizer, model=model)
+
     trainer = Seq2SeqTrainer(
         model=model,
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
         tokenizer=processor.tokenizer,
-        data_collator=lambda data: {
-            "pixel_values": torch.stack([f["pixel_values"] for f in data]),
-            "labels": torch.stack([f["labels"] for f in data]),
-            "attention_mask": torch.stack([f["attention_mask"] for f in data]),
-        },
+        data_collator=data_collator,
     )
 
     trainer.train()
