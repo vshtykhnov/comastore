@@ -91,6 +91,8 @@ def main() -> None:
         learning_rate=lr,
         fp16=torch.cuda.is_available(),
         remove_unused_columns=False,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=1,
     )
 
     data_collator = donut_collate_fn
