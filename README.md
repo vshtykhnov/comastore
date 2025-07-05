@@ -27,7 +27,7 @@ pip install -r requirements.txt
    ```bash
    python pipeline.py predict path/to/image.jpg
    ```
-   If `--weights` is not specified, the latest weights from `yolo/runs/` are used.
+   If `--weights` is not specified, the latest weights from `runs/` are used.
 5. Export detected products as cropped images:
    ```bash
    python pipeline.py cards path/to/images --out cards/

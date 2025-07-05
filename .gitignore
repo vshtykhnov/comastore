@@ -10,6 +10,7 @@ __pycache__/
 images/
 labels/
 cards/
+donut_dataset/
 
 ./donut_out/*
 # Distribution / packaging
