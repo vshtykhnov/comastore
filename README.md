@@ -1,36 +1,57 @@
-# YOLOv8 Pipeline
+# Computer Vision Pipelines
 
-Simple tools to prepare a dataset, train a YOLOv8 model and run predictions.
+This repository contains two simple command line tools to work with product card images.
 
-## Usage
+- **YOLOv8 pipeline** (`yolo/pipeline.py`) – dataset preparation and training for object detection.
+- **Donut pipeline** (`donut/pipeline.py`) – preparing OCR data from cropped card images.
 
-1. Install dependencies
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## YOLO Usage
+
+1. Put your images in `images/` and matching YOLO labels in `labels/`.
+2. Create the dataset structure:
    ```bash
-   pip install -r requirements.txt
+   python yolo/pipeline.py prepare
    ```
-2. Put your images in `images/` and matching YOLO labels in `labels/`.
-3. Create the dataset structure with train/val/test splits
+3. Train the model:
    ```bash
-   python pipeline.py prepare
+   python yolo/pipeline.py train --model yolov8n.pt --epochs 50
    ```
-4. Train the model
+4. Predict on an image or folder:
    ```bash
-   python pipeline.py train --model yolov8n.pt --epochs 50
-   ```
-5. Predict on an image or folder
-   ```bash
-   python pipeline.py predict path/to/image.jpg
+   python yolo/pipeline.py predict path/to/image.jpg
    ```
    If `--weights` is not specified, the latest weights from `runs/train/` are used.
-
-6. Export detected products as cropped images
+5. Export detected products as cropped images:
    ```bash
-   python pipeline.py cards path/to/images --out cards/
+   python yolo/pipeline.py cards path/to/images --out cards/
+   ```
+6. Evaluate on the test split:
+   ```bash
+   python yolo/pipeline.py test
    ```
 
-7. Evaluate on the test split
-   ```bash
-   python pipeline.py test
-   ```
+Edit `yolo/dataset.yaml` to list your class names.
 
-Edit `dataset.yaml` to list your class names.
+## Donut Usage
+
+Card images cropped by YOLO can be prepared for Donut OCR training.
+Ground truth files must be JSON next to each image. Examples of `promo_type`
+and fields:
+
+```jsonc
+{ "promo_type": "percent_discount", "new_price": 14.99, "old_price": 29.99, "discount_pct": 50, "unit": "kg" }
+```
+
+Run the preparer to split cards into train/val/test (defaults to `cards/`):
+
+```bash
+python donut/pipeline.py prepare
+```
+
+The resulting dataset will be created in `donut_dataset/`.
