@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from ultralytics import YOLO
 import torch
+from PIL import Image
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 
@@ -125,6 +126,33 @@ def test_model(data: Path, weights: Path | None, imgsz: int, device: str) -> Non
     print("mAP50:", metrics.box.map50)
 
 
+def export_cards(source: Path, out: Path, weights: Path | None, imgsz: int, device: str) -> None:
+    if weights is None:
+        weights = latest_weights()
+        if weights is None:
+            raise SystemExit("No trained weights found in runs/train")
+    yolo = YOLO(str(weights))
+    imgs = []
+    if source.is_dir():
+        for ext in IMAGE_EXTS:
+            imgs.extend(sorted(source.glob(f"*{ext}")))
+    else:
+        imgs.append(source)
+    out.mkdir(parents=True, exist_ok=True)
+    for img_path in imgs:
+        results = yolo.predict(str(img_path), imgsz=imgsz, device=device)
+        if not results:
+            continue
+        res = results[0]
+        im = Image.open(img_path)
+        boxes = res.boxes.xyxy.cpu().numpy().astype(int)
+        for i, (x1, y1, x2, y2) in enumerate(boxes):
+            crop = im.crop((x1, y1, x2, y2))
+            dest = out / f"{img_path.stem}_{i}{img_path.suffix}"
+            crop.save(dest)
+            print(f"Saved {dest}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="YOLOv8 pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -175,6 +203,18 @@ def main() -> None:
     p_test.add_argument("--device", default=DEFAULT_DEVICE, help="Device (e.g. '0' for first GPU, 'cpu')")
     p_test.set_defaults(
         func=lambda a: test_model(Path(a.data), Path(a.weights) if a.weights else None, a.imgsz, a.device)
+    )
+
+    p_cards = sub.add_parser("cards", help="Export detected objects as cropped images")
+    p_cards.add_argument("source", help="Image or directory")
+    p_cards.add_argument("--out", default="cards", help="Destination directory")
+    p_cards.add_argument("--weights", help="Path to weights (defaults to latest)")
+    p_cards.add_argument("--imgsz", type=int, default=640, help="Image size")
+    p_cards.add_argument("--device", default=DEFAULT_DEVICE, help="Device (e.g. '0' for first GPU, 'cpu')")
+    p_cards.set_defaults(
+        func=lambda a: export_cards(
+            Path(a.source), Path(a.out), Path(a.weights) if a.weights else None, a.imgsz, a.device
+        )
     )
 
     args = parser.parse_args()
