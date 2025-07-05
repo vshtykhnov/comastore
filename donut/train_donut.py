@@ -52,21 +52,9 @@ class DonutDataset(Dataset):
             max_length=self.max_length,
         )
 
-        # enc contains 'pixel_values', 'input_ids', 'attention_mask'...
-        # we only need pixel_values and labels=input_ids
         pixel_values = enc.pixel_values.squeeze(0)
         labels = enc.input_ids.squeeze(0)
         return {"pixel_values": pixel_values, "labels": labels}
-
-
-def collate_fn(batch: list[dict]) -> dict:
-    """Stack pixel_values and labels, mask padding tokens."""
-    pixel_values = torch.stack([b["pixel_values"] for b in batch])
-    labels       = torch.stack([b["labels"]       for b in batch])
-    # mask pad tokens
-    pad_id = dataset.processor.tokenizer.pad_token_id
-    labels = labels.masked_fill(labels == pad_id, -100)
-    return {"pixel_values": pixel_values, "labels": labels}
 
 
 def main() -> None:
@@ -95,6 +83,15 @@ def main() -> None:
     train_ds = DonutDataset(train_images, train_gts, processor)
     val_ds   = DonutDataset(val_images, val_gts, processor)
 
+    # get pad_token_id for masking
+    pad_token_id = processor.tokenizer.pad_token_id
+
+    def collate_fn(batch, pad_token_id=pad_token_id):
+        pixel_values = torch.stack([b["pixel_values"] for b in batch])
+        labels       = torch.stack([b["labels"]       for b in batch])
+        labels = labels.masked_fill(labels == pad_token_id, -100)
+        return {"pixel_values": pixel_values, "labels": labels}
+
     # training arguments
     training_args = Seq2SeqTrainingArguments(
         output_dir=output_dir,
@@ -102,7 +99,7 @@ def main() -> None:
         gradient_accumulation_steps=4,
         per_device_eval_batch_size=1,
         predict_with_generate=True,
-        eval_strategy="epoch",
+        evaluation_strategy="epoch",
         logging_steps=100,
         save_strategy="epoch",
         load_best_model_at_end=True,
