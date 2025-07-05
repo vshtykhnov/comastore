@@ -84,7 +84,7 @@ def main() -> None:
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         predict_with_generate=True,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         logging_steps=100,
         save_strategy="epoch",
         num_train_epochs=max_epochs,
