@@ -21,9 +21,9 @@ def main(model_dir: str, img_path: str) -> None:
         max_length=512,
         num_beams=5,
         early_stopping=True,
+        use_cache=False,
     )
     pred = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-
     try:
         result = json.loads(pred)
     except json.JSONDecodeError:

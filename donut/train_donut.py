@@ -16,6 +16,9 @@ from transformers import (
     Seq2SeqTrainer,
 )
 
+TASK_PROMPT = "<s_serialize>"
+processor: DonutProcessor | None = None
+
 
 class DonutDataset(Dataset):
     """Simple dataset reading images and JSON ground truth."""
@@ -36,7 +39,7 @@ class DonutDataset(Dataset):
         key = img_path.stem
         with open(self.gts[key], encoding="utf-8") as f:
             gt = json.load(f)
-        target_str = json.dumps(gt, ensure_ascii=False)
+        target_str = TASK_PROMPT + json.dumps(gt, ensure_ascii=False)
         image = Image.open(img_path).convert("RGB")
         data = self.processor(
             images=image,
@@ -55,6 +58,7 @@ def donut_collate_fn(batch):
 
     pixel_values = torch.stack([item["pixel_values"] for item in batch])
     labels = torch.stack([item["labels"] for item in batch])
+    labels[labels == processor.tokenizer.pad_token_id] = -100
     return {
         "pixel_values": pixel_values,
         "labels": labels,
