@@ -9,6 +9,7 @@ __pycache__/
 # Dataset directories
 images/
 labels/
+cards/
 
 ./donut_out/*
 # Distribution / packaging
