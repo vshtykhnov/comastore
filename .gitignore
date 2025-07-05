@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+# Dataset directories
+images/
+labels/
+
 ./donut_out/*
 # Distribution / packaging
 .Python
