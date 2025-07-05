@@ -1,72 +1,91 @@
-# Biedronka Leaflet Parser
+# Leaflet PDF ➜ YOLOv8 Pipeline
 
-This project provides a simple CLI to train a Donut model and parse promotional PDFs from the Biedronka supermarket. The goal is to extract all promotional offers into a single JSON file.
+This repository contains small utilities to turn promotional leaflets (PDF) into a ready-to-train YOLOv8 dataset and to train/run inference.
 
-## Project Structure
+## Scripts
 
-```
-.
-├── app.py            # CLI application
-├── data/             # Training and validation JSONL files
-├── pages/            # PNG pages used for training
-├── donut_out/        # Directory to store trained model
-```
+| Script               | Purpose                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `app.py`             | Convert every PDF in `raw_pdf/` into PNG pages inside `pages/` (default 72 dpi).                       |
+| `detect_dpi.py`      | Print the effective DPI of each PDF page or, with `--images`, the DPI metadata of existing images.     |
+| `prepare_dataset.py` | Match `labels/*.txt` with `images/\*.(png                                                              | jpg)`having the same stem, split into **train/val** and copy/move them into`dataset/` structure expected by Ultralytics. |
+| `train_yolo.py`      | Minimal CLI wrapper around **Ultralytics YOLO** to train (`train` sub-command) or predict (`predict`). |
 
-- `data/train.jsonl` and `data/val.jsonl` contain training examples. Each line is a JSON object describing one page.
-- `pages/` contains the PNG images referenced in the JSONL files.
+## Quick-start
 
-## Installation
-
-Use Python 3.11 and install dependencies:
+### 1. Install dependencies
 
 ```bash
-pip install "transformers>=4.44" datasets accelerate bitsandbytes
-pip install pdf2image pillow torch torchvision
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-You also need `poppler` for `pdf2image` to convert PDFs to images.
+Poppler is required on Windows for some PDF tools (e.g. `pdf2image`). Install it if you plan to use those tools.
 
-## Training
+### 2. Convert PDFs to images
 
-Fine-tune the base Donut model using annotated pages:
+Place source PDFs into `raw_pdf/` and run:
 
 ```bash
-python app.py train \
-    --train data/train.jsonl \
-    --val data/val.jsonl \
-    --out donut_out \
-    --epochs 5
+python app.py
 ```
 
-After training, the `donut_out` directory will contain the model and processor weights.
+Images are created in `pages/` with filenames like `flyer_p01.png`.
 
-## Parsing a PDF
+### 3. Annotate images
 
-To parse a PDF and extract all offers:
+Label the images (e.g. with **LabelImg**, **Roboflow**, etc.) in **YOLO format** and save resulting `.txt` files to a `labels/` folder alongside the raw images in `images/`.
+
+```
+images/
+  flyer_p01.png
+  flyer_p02.png
+labels/
+  flyer_p01.txt
+  flyer_p02.txt
+```
+
+### 4. Prepare dataset directory
 
 ```bash
-python app.py parse leaflet.pdf donut_out --out offers.json
+python prepare_dataset.py --ratio 0.8   # 80 % train, 20 % val
 ```
 
-This command will convert each PDF page to an image, run the model and save a flat list of offers to `offers.json`.
-
-## Output Format
+This produces the structure:
 
 ```
-[
-  {
-    "page": 1,
-    "name": "Czereśnie na wagę",
-    "promo_type": "percent_discount",
-    "new": 16.99,
-    "old": 24.99,
-    "discount_pct": 32,
-    "unit": "kg",
-    "valid_from": "2025-07-03",
-    "valid_to": "2025-07-05"
-  },
-  ...
-]
+dataset/
+  images/train/*.png
+  images/val/*.png
+  labels/train/*.txt
+  labels/val/*.txt
 ```
 
-Each offer includes the page number and common fields such as `promo_type` and prices. If `valid_from` and `valid_to` are present on the page, they are attached to each offer.
+Create (or adjust) `dataset.yaml` to point to these folders:
+
+```yaml
+train: ./dataset/images/train
+val: ./dataset/images/val
+names: [item] # list your class names here
+```
+
+### 5. Train YOLOv8
+
+```bash
+python train_yolo.py train --model yolov8n.pt --data dataset.yaml --epochs 50 --batch 16 --imgsz 640 --device 0
+```
+
+Weights and logs are saved to `runs/train/<name>`.
+
+### 6. Run inference
+
+```bash
+python train_yolo.py predict best.pt test_images/ --imgsz 640 --device 0
+```
+
+Predicted images are saved to `runs/predict/<name>`.
+
+## License
+
+MIT

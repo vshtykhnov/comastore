@@ -206,3 +206,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# YOLO training artifacts
+runs/
+dataset/
+pages/
+# Model weight files
+*.pt

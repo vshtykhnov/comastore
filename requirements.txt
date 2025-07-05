@@ -6,3 +6,5 @@ pdf2image
 pillow
 torch
 torchvision
+PyMuPDF>=1.24
+ultralytics>=8.2
