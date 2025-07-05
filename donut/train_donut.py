@@ -50,6 +50,8 @@ class DonutDataset(Dataset):
             max_length=self.max_length,
         )
 
+        print(self.processor.tokenizer.decode(encodings.input_ids.squeeze(0), skip_special_tokens=False))
+
         # Return only the necessary fields
         return {
             "pixel_values": encodings.pixel_values.squeeze(0),
@@ -83,7 +85,7 @@ def main() -> None:
     print("Using cls_token=", processor.tokenizer.cls_token)
     print("Using eos_token=", processor.tokenizer.eos_token)
 
-    processor.tokenizer.model_max_length = 128
+    processor.tokenizer.model_max_length = 512
 
     # Load model and configure generation
     model = VisionEncoderDecoderModel.from_pretrained(model_name).to(device)
@@ -111,7 +113,7 @@ def main() -> None:
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        generation_max_length=processor.tokenizer.model_max_length,
+        generation_max_length=512,
         generation_num_beams=5,
         learning_rate=lr,
         num_train_epochs=max_epochs,
