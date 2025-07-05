@@ -85,10 +85,14 @@ def train_model(data: Path, model: str, epochs: int, imgsz: int, batch: int, dev
 
 
 def latest_weights() -> Path | None:
-    root = Path("runs/train")
+    root = Path("runs/detect")
     if not root.exists():
         return None
-    dirs = sorted(root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+    dirs = sorted(
+        (p for p in root.iterdir() if p.is_dir()),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     for d in dirs:
         for name in ("best.pt", "last.pt"):
             w = d / "weights" / name
