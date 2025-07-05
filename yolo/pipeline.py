@@ -82,11 +82,18 @@ def prepare_dataset(
 
 def train_model(data: Path, model: str, epochs: int, imgsz: int, batch: int, device: str) -> None:
     yolo = YOLO(model)
-    yolo.train(data=str(data), epochs=epochs, imgsz=imgsz, batch=batch, device=device)
+    yolo.train(
+        data=str(data),
+        epochs=epochs,
+        imgsz=imgsz,
+        batch=batch,
+        device=device,
+        project="yolo/runs",
+    )
 
 
 def latest_weights() -> Path | None:
-    root = Path("runs/detect")
+    root = Path("yolo/runs/detect")
     if not root.exists():
         return None
     dirs = sorted(
@@ -106,9 +113,11 @@ def predict_image(source: Path, weights: Path | None, imgsz: int, device: str) -
     if weights is None:
         weights = latest_weights()
         if weights is None:
-            raise SystemExit("No trained weights found in runs/train")
+            raise SystemExit("No trained weights found in yolo/runs")
     yolo = YOLO(str(weights))
-    results = yolo.predict(str(source), imgsz=imgsz, device=device, save=True)
+    results = yolo.predict(
+        str(source), imgsz=imgsz, device=device, save=True, project="yolo/runs"
+    )
     if results:
         print(f"Results saved to {results[0].save_dir}")
 
@@ -117,9 +126,16 @@ def test_model(data: Path, weights: Path | None, imgsz: int, device: str) -> Non
     if weights is None:
         weights = latest_weights()
         if weights is None:
-            raise SystemExit("No trained weights found in runs/train")
+            raise SystemExit("No trained weights found in yolo/runs")
     yolo = YOLO(str(weights))
-    metrics = yolo.val(data=str(data), split="test", imgsz=imgsz, device=device, save=True)
+    metrics = yolo.val(
+        data=str(data),
+        split="test",
+        imgsz=imgsz,
+        device=device,
+        save=True,
+        project="yolo/runs",
+    )
     if hasattr(metrics, "save_dir"):
         print(f"Results saved to {metrics.save_dir}")
     print("mAP50-95:", metrics.box.map)
@@ -130,7 +146,7 @@ def export_cards(source: Path, out: Path, weights: Path | None, imgsz: int, devi
     if weights is None:
         weights = latest_weights()
         if weights is None:
-            raise SystemExit("No trained weights found in runs/train")
+            raise SystemExit("No trained weights found in yolo/runs")
     yolo = YOLO(str(weights))
     imgs = []
     if source.is_dir():
@@ -158,9 +174,21 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_prep = sub.add_parser("prepare", help="Prepare dataset structure")
-    p_prep.add_argument("--images", default="images", help="Source images directory")
-    p_prep.add_argument("--labels", default="labels", help="Source labels directory")
-    p_prep.add_argument("--out", default="dataset", help="Output dataset root")
+    p_prep.add_argument(
+        "--images",
+        default="yolo/images",
+        help="Source images directory",
+    )
+    p_prep.add_argument(
+        "--labels",
+        default="yolo/labels",
+        help="Source labels directory",
+    )
+    p_prep.add_argument(
+        "--out",
+        default="yolo/dataset",
+        help="Output dataset root",
+    )
     p_prep.add_argument(
         "--train-ratio",
         type=float,
