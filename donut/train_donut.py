@@ -107,7 +107,7 @@ def main() -> None:
         gradient_accumulation_steps=4,
         per_device_eval_batch_size=1,
         predict_with_generate=True,
-        eval_strategy="epoch",
+        evaluation_strategy="epoch",
         save_strategy="epoch",
         logging_steps=100,
         load_best_model_at_end=True,
