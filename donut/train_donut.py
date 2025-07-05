@@ -78,7 +78,6 @@ def main() -> None:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    global processor
     processor = DonutProcessor.from_pretrained(model_name)
     processor.tokenizer.model_max_length = 128
 
