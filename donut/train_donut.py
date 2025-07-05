@@ -83,16 +83,15 @@ def main() -> None:
     train_ds = DonutDataset(train_images, train_gts, processor)
     val_ds   = DonutDataset(val_images, val_gts, processor)
 
-    # get pad_token_id for masking
+    # capture pad_token_id for masking in collate
     pad_token_id = processor.tokenizer.pad_token_id
-
     def collate_fn(batch, pad_token_id=pad_token_id):
         pixel_values = torch.stack([b["pixel_values"] for b in batch])
         labels       = torch.stack([b["labels"]       for b in batch])
         labels = labels.masked_fill(labels == pad_token_id, -100)
         return {"pixel_values": pixel_values, "labels": labels}
 
-    # training arguments
+    # training arguments with correct evaluation fields
     training_args = Seq2SeqTrainingArguments(
         output_dir=output_dir,
         per_device_train_batch_size=1,
@@ -100,9 +99,13 @@ def main() -> None:
         per_device_eval_batch_size=1,
         predict_with_generate=True,
         eval_strategy="epoch",
-        logging_steps=100,
         save_strategy="epoch",
+        logging_steps=100,
         load_best_model_at_end=True,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
+        generation_max_length=processor.tokenizer.model_max_length,
+        generation_num_beams=5,
         learning_rate=lr,
         num_train_epochs=max_epochs,
         fp16=torch.cuda.is_available(),

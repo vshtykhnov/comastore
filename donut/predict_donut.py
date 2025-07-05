@@ -25,6 +25,7 @@ def main(model_dir: str, img_path: str) -> None:
     )
     pred = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
     try:
+        print(pred, "prediction")
         result = json.loads(pred)
     except json.JSONDecodeError:
         result = {"error": "failed to parse", "raw": pred}
