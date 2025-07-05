@@ -17,13 +17,22 @@ def find_image(label: Path, images_dir: Path) -> Path | None:
     return None
 
 
-def prepare_dataset(images: Path, labels: Path, out: Path, ratio: float, move: bool) -> None:
+def prepare_dataset(
+    images: Path,
+    labels: Path,
+    out: Path,
+    train_ratio: float,
+    val_ratio: float,
+    move: bool,
+) -> None:
     random.seed(42)
     train_img = out / "images" / "train"
     val_img = out / "images" / "val"
+    test_img = out / "images" / "test"
     train_lbl = out / "labels" / "train"
     val_lbl = out / "labels" / "val"
-    for d in (train_img, val_img, train_lbl, val_lbl):
+    test_lbl = out / "labels" / "test"
+    for d in (train_img, val_img, test_img, train_lbl, val_lbl, test_lbl):
         d.mkdir(parents=True, exist_ok=True)
 
     pairs: list[tuple[Path, Path]] = []
@@ -39,9 +48,11 @@ def prepare_dataset(images: Path, labels: Path, out: Path, ratio: float, move: b
         return
 
     random.shuffle(pairs)
-    split = int(len(pairs) * ratio)
-    train_pairs = pairs[:split]
-    val_pairs = pairs[split:]
+    split1 = int(len(pairs) * train_ratio)
+    split2 = int(len(pairs) * (train_ratio + val_ratio))
+    train_pairs = pairs[:split1]
+    val_pairs = pairs[split1:split2]
+    test_pairs = pairs[split2:]
 
     def transfer(src: Path, dst: Path):
         if move:
@@ -57,7 +68,13 @@ def prepare_dataset(images: Path, labels: Path, out: Path, ratio: float, move: b
         transfer(img, val_img / img.name)
         transfer(lbl, val_lbl / lbl.name)
 
-    print(f"Done! Train: {len(train_pairs)}, Val: {len(val_pairs)}")
+    for img, lbl in test_pairs:
+        transfer(img, test_img / img.name)
+        transfer(lbl, test_lbl / lbl.name)
+
+    print(
+        f"Done! Train: {len(train_pairs)}, Val: {len(val_pairs)}, Test: {len(test_pairs)}"
+    )
 
 
 def train_model(data: Path, model: str, epochs: int, imgsz: int, batch: int, device: str) -> None:
@@ -89,6 +106,18 @@ def predict_image(source: Path, weights: Path | None, imgsz: int, device: str) -
         print(f"Results saved to {results[0].save_dir}")
 
 
+def test_model(data: Path, weights: Path | None, imgsz: int, device: str) -> None:
+    if weights is None:
+        weights = latest_weights()
+        if weights is None:
+            raise SystemExit("No trained weights found in runs/train")
+    yolo = YOLO(str(weights))
+    metrics = yolo.val(data=str(data), split="test", imgsz=imgsz, device=device, save=True)
+    if hasattr(metrics, "save_dir"):
+        print(f"Results saved to {metrics.save_dir}")
+    print(metrics)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="YOLOv8 pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -97,9 +126,24 @@ def main() -> None:
     p_prep.add_argument("--images", default="images", help="Source images directory")
     p_prep.add_argument("--labels", default="labels", help="Source labels directory")
     p_prep.add_argument("--out", default="dataset", help="Output dataset root")
-    p_prep.add_argument("--ratio", type=float, default=0.8, help="Train split ratio")
+    p_prep.add_argument(
+        "--train-ratio",
+        type=float,
+        default=0.7,
+        help="Training split ratio",
+    )
+    p_prep.add_argument(
+        "--val-ratio",
+        type=float,
+        default=0.15,
+        help="Validation split ratio",
+    )
     p_prep.add_argument("--move", action="store_true", help="Move files instead of copy")
-    p_prep.set_defaults(func=lambda a: prepare_dataset(Path(a.images), Path(a.labels), Path(a.out), a.ratio, a.move))
+    p_prep.set_defaults(
+        func=lambda a: prepare_dataset(
+            Path(a.images), Path(a.labels), Path(a.out), a.train_ratio, a.val_ratio, a.move
+        )
+    )
 
     p_train = sub.add_parser("train", help="Train a YOLO model")
     p_train.add_argument("--data", default="dataset.yaml", help="Dataset YAML")
@@ -116,6 +160,15 @@ def main() -> None:
     p_pred.add_argument("--imgsz", type=int, default=640, help="Image size")
     p_pred.add_argument("--device", default="cpu", help="Device")
     p_pred.set_defaults(func=lambda a: predict_image(Path(a.source), Path(a.weights) if a.weights else None, a.imgsz, a.device))
+
+    p_test = sub.add_parser("test", help="Evaluate on the test split")
+    p_test.add_argument("--data", default="dataset.yaml", help="Dataset YAML")
+    p_test.add_argument("--weights", help="Path to weights (defaults to latest)")
+    p_test.add_argument("--imgsz", type=int, default=640, help="Image size")
+    p_test.add_argument("--device", default="cpu", help="Device")
+    p_test.set_defaults(
+        func=lambda a: test_model(Path(a.data), Path(a.weights) if a.weights else None, a.imgsz, a.device)
+    )
 
     args = parser.parse_args()
     args.func(args)

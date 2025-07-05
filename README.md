@@ -9,7 +9,7 @@ Simple tools to prepare a dataset, train a YOLOv8 model and run predictions.
    pip install -r requirements.txt
    ```
 2. Put your images in `images/` and matching YOLO labels in `labels/`.
-3. Create the dataset structure
+3. Create the dataset structure with train/val/test splits
    ```bash
    python pipeline.py prepare
    ```
@@ -22,5 +22,10 @@ Simple tools to prepare a dataset, train a YOLOv8 model and run predictions.
    python pipeline.py predict path/to/image.jpg
    ```
    If `--weights` is not specified, the latest weights from `runs/train/` are used.
+
+6. Evaluate on the test split
+   ```bash
+   python pipeline.py test
+   ```
 
 Edit `dataset.yaml` to list your class names.
