@@ -62,3 +62,17 @@ python donut/pipeline.py prepare
 ```
 
 The resulting dataset will be created in `donut_dataset/`.
+
+### Training and prediction
+
+Fine-tune Donut on the prepared dataset:
+
+```bash
+python donut/train_donut.py
+```
+
+Run inference on an image using the saved model:
+
+```bash
+python donut/predict_donut.py donut_finetuned path/to/your/image.png
+```

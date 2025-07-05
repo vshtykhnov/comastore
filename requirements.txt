@@ -1,2 +1,4 @@
 ultralytics>=8.2
 Pillow
+transformers>=4.30
+torch
