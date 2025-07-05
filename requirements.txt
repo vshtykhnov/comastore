@@ -1,5 +1,5 @@
 ultralytics>=8.2
 Pillow
-transformers==4.51.0
+transformers==4.53.1
 torch
 accelerate==0.34.2
