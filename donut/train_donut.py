@@ -78,6 +78,11 @@ def main() -> None:
     processor.tokenizer.model_max_length = 128
 
     model = VisionEncoderDecoderModel.from_pretrained(model_name).to(device)
+
+    model.config.decoder_start_token_id = processor.tokenizer.bos_token_id
+    model.config.pad_token_id           = processor.tokenizer.pad_token_id
+    model.config.eos_token_id           = processor.tokenizer.eos_token_id
+
     model.gradient_checkpointing_enable()
 
     train_ds = DonutDataset(train_images, train_gts, processor)
