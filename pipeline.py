@@ -5,9 +5,11 @@ import random
 import shutil
 from pathlib import Path
 from ultralytics import YOLO
+import torch
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 
+DEFAULT_DEVICE = "0" if torch.cuda.is_available() else "cpu"
 
 def find_image(label: Path, images_dir: Path) -> Path | None:
     for ext in IMAGE_EXTS:
@@ -151,21 +153,21 @@ def main() -> None:
     p_train.add_argument("--epochs", type=int, default=50, help="Number of epochs")
     p_train.add_argument("--imgsz", type=int, default=640, help="Image size")
     p_train.add_argument("--batch", type=int, default=16, help="Batch size")
-    p_train.add_argument("--device", default="cpu", help="Device")
+    p_train.add_argument("--device", default=DEFAULT_DEVICE, help="Device (e.g. '0' for first GPU, 'cpu')")
     p_train.set_defaults(func=lambda a: train_model(Path(a.data), a.model, a.epochs, a.imgsz, a.batch, a.device))
 
     p_pred = sub.add_parser("predict", help="Run inference")
     p_pred.add_argument("source", help="Image or directory")
     p_pred.add_argument("--weights", help="Path to weights (defaults to latest)")
     p_pred.add_argument("--imgsz", type=int, default=640, help="Image size")
-    p_pred.add_argument("--device", default="cpu", help="Device")
+    p_pred.add_argument("--device", default=DEFAULT_DEVICE, help="Device (e.g. '0' for first GPU, 'cpu')")
     p_pred.set_defaults(func=lambda a: predict_image(Path(a.source), Path(a.weights) if a.weights else None, a.imgsz, a.device))
 
     p_test = sub.add_parser("test", help="Evaluate on the test split")
     p_test.add_argument("--data", default="dataset.yaml", help="Dataset YAML")
     p_test.add_argument("--weights", help="Path to weights (defaults to latest)")
     p_test.add_argument("--imgsz", type=int, default=640, help="Image size")
-    p_test.add_argument("--device", default="cpu", help="Device")
+    p_test.add_argument("--device", default=DEFAULT_DEVICE, help="Device (e.g. '0' for first GPU, 'cpu')")
     p_test.set_defaults(
         func=lambda a: test_model(Path(a.data), Path(a.weights) if a.weights else None, a.imgsz, a.device)
     )
