@@ -81,7 +81,6 @@ def main() -> None:
 
     training_args = Seq2SeqTrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         predict_with_generate=True,
         eval_strategy="epoch",
