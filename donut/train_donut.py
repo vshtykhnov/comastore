@@ -13,7 +13,6 @@ from transformers import (
     VisionEncoderDecoderModel,
     Seq2SeqTrainingArguments,
     Seq2SeqTrainer,
-    DataCollatorForSeq2Seq,
 )
 
 
@@ -49,6 +48,18 @@ class DonutDataset(Dataset):
         return {k: v.squeeze(0) for k, v in data.items()}
 
 
+def donut_collate_fn(batch):
+    """Merge a list of samples into a batch expected by VisionEncoderDecoderModel."""
+    import torch
+
+    pixel_values = torch.stack([item["pixel_values"] for item in batch])
+    labels = torch.stack([item["labels"] for item in batch])
+    return {
+        "pixel_values": pixel_values,
+        "labels": labels,
+    }
+
+
 def main() -> None:
     train_images = "donut_dataset/images/train"
     train_gts = "donut_dataset/ground_truth/train"
@@ -82,7 +93,7 @@ def main() -> None:
         remove_unused_columns=False,
     )
 
-    data_collator = DataCollatorForSeq2Seq(tokenizer=processor.tokenizer, model=model)
+    data_collator = donut_collate_fn
 
     trainer = Seq2SeqTrainer(
         model=model,
