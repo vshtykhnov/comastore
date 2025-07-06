@@ -23,23 +23,20 @@ def main(model_dir: str, img_path: str) -> None:
     )
     pixel_values = enc.pixel_values.to(device)
 
-    # 4) Инициализируем декодер одним BOS-токеном
-    bos_id = processor.tokenizer.bos_token_id
-    decoder_input_ids = torch.tensor([[bos_id]], device=device)
+    # 4) Переключаем модель в режим вывода и генерируем без явного BOS
+    model.eval()
+    with torch.no_grad():
+        generated_ids = model.generate(
+            pixel_values=pixel_values,
+            max_length=processor.tokenizer.model_max_length,
+            num_beams=5,
+            early_stopping=True,
+            eos_token_id=processor.tokenizer.eos_token_id,
+            pad_token_id=processor.tokenizer.pad_token_id,
+            use_cache=True,
+        )
 
-    # 5) Генерируем вывода
-    generated_ids = model.generate(
-        pixel_values=pixel_values,
-        decoder_input_ids=decoder_input_ids,
-        max_length=processor.tokenizer.model_max_length,
-        num_beams=5,
-        early_stopping=True,
-        eos_token_id=processor.tokenizer.eos_token_id,
-        pad_token_id=processor.tokenizer.pad_token_id,
-        use_cache=False,  # рекомендуем False при gradient checkpointing
-    )
-
-    # 6) Декодируем сначала со всеми спецто�енами
+    # 6) Декодируем сначала со всеми спецтоенами
     raw = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
     print(">>> raw with specials:", repr(raw))
 

@@ -51,13 +51,7 @@ class DonutDataset(Dataset):
             return_tensors="pt",
         )
         labels = tokenized.input_ids.squeeze(0)
-
         # Debug shapes:
-        print(f"Pixel values: {pixel_values.shape}, Labels: {labels.shape}")
-        # Decode labels for sanity:
-        print("Decoded label sample (without specials):", self.processor.tokenizer.decode(labels, skip_special_tokens=True))
-        # Also print raw tokens including special tokens:
-        print("Decoded label sample (raw):", self.processor.tokenizer.decode(labels, skip_special_tokens=False))
         return {"pixel_values": pixel_values, "labels": labels}
 
 
@@ -104,7 +98,7 @@ def main() -> None:
         generation_max_length=512,
         generation_num_beams=5,
         learning_rate=3e-6,
-        num_train_epochs=3,
+        num_train_epochs=10,
         fp16=torch.cuda.is_available(),
         remove_unused_columns=False,
     )
