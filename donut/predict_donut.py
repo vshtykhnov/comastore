@@ -2,7 +2,6 @@
 """Run inference with a fine-tuned Donut model."""
 import sys
 import json
-from pathlib import Path
 from PIL import Image
 import torch
 from transformers import DonutProcessor, VisionEncoderDecoderModel
@@ -15,12 +14,11 @@ def main(model_dir: str, img_path: str) -> None:
 
     image = Image.open(img_path).convert("RGB")
     pixel_values = processor.feature_extractor(
-        images=image,
-        return_tensors="pt"
+        images=image, return_tensors="pt"
     ).pixel_values.to(device)
 
-    cls_token_id = processor.tokenizer.cls_token_id
-    decoder_input_ids = torch.tensor([[cls_token_id]], device=device)
+    cls_id = processor.tokenizer.cls_token_id
+    decoder_input_ids = torch.tensor([[cls_id]], device=device)
 
     generated_ids = model.generate(
         pixel_values=pixel_values,
@@ -33,17 +31,20 @@ def main(model_dir: str, img_path: str) -> None:
         use_cache=True,
     )
 
-    pred = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+    raw_pred = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
 
-    if pred.startswith(processor.tokenizer.cls_token):
-        pred = pred[len(processor.tokenizer.cls_token):]
-    pred = pred.replace(processor.tokenizer.eos_token, "").strip()
+    cls_tok = processor.tokenizer.cls_token or ""
+    eos_tok = processor.tokenizer.eos_token or ""
+    if raw_pred.startswith(cls_tok):
+        raw_pred = raw_pred[len(cls_tok):]
+    raw_pred = raw_pred.replace(eos_tok, "").strip()
 
     try:
-        result = json.loads(pred)
+        result = json.loads(raw_pred)
     except json.JSONDecodeError:
-        result = {"error": "failed to parse", "raw": pred}
+        result = {"error": "failed to parse", "raw": raw_pred}
 
+    # 8) Выводим красиво
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
