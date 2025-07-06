@@ -12,6 +12,7 @@ from transformers import (
     VisionEncoderDecoderModel,
     Seq2SeqTrainingArguments,
     Seq2SeqTrainer,
+    EarlyStoppingCallback,
 )
 
 class DonutDataset(Dataset):
@@ -40,21 +41,18 @@ class DonutDataset(Dataset):
         image = Image.open(img_path).convert("RGB")
         # Debug prints:
         print(f"Processing {img_path.name}")
-        # Processor returns both pixel_values and labels tensors
-        enc = self.processor(
-            images=image,
-            text=json.dumps(gt, ensure_ascii=False),
-            return_tensors="pt",
+        # Processor now handles image only; text handled by tokenizer separately
+        pixel_values = self.processor(image, return_tensors="pt").pixel_values.squeeze(0)
+        tokenized = self.processor.tokenizer(
+            json.dumps(gt, ensure_ascii=False),
             padding="max_length",
             truncation=True,
             max_length=self.max_length,
+            return_tensors="pt",
         )
+        labels = tokenized.input_ids.squeeze(0)
 
-        # Extract pixel values and labels (not input_ids)
-        pixel_values = enc.pixel_values.squeeze(0)
-        labels = enc.labels.squeeze(0)
-
-                # Debug shapes:
+        # Debug shapes:
         print(f"Pixel values: {pixel_values.shape}, Labels: {labels.shape}")
         # Decode labels for sanity:
         print("Decoded label sample (without specials):", self.processor.tokenizer.decode(labels, skip_special_tokens=True))
@@ -78,6 +76,9 @@ def main() -> None:
     processor.tokenizer.model_max_length = 512
 
     model = VisionEncoderDecoderModel.from_pretrained(model_name).to(device)
+    # Freeze visual encoder to avoid catastrophic forgetting on small datasets
+    for p in model.encoder.parameters():
+        p.requires_grad_(False)
     model.config.decoder_start_token_id = processor.tokenizer.bos_token_id
     model.config.pad_token_id = processor.tokenizer.pad_token_id
     model.config.eos_token_id = processor.tokenizer.eos_token_id
@@ -102,8 +103,8 @@ def main() -> None:
         greater_is_better=False,
         generation_max_length=512,
         generation_num_beams=5,
-        learning_rate=1e-5,
-        num_train_epochs=7,
+        learning_rate=3e-6,
+        num_train_epochs=3,
         fp16=torch.cuda.is_available(),
         remove_unused_columns=False,
     )
@@ -125,6 +126,7 @@ def main() -> None:
         eval_dataset=val_ds,
         data_collator=collate_fn,
         tokenizer=processor.tokenizer,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=2)],
     )
 
     trainer.train()
