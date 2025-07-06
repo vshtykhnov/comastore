@@ -9,17 +9,22 @@ from transformers import DonutProcessor, VisionEncoderDecoderModel
 def main(model_dir: str, img_path: str) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    # 1) Загружаем processor и модель
     processor = DonutProcessor.from_pretrained(model_dir, use_fast=True)
-    model     = VisionEncoderDecoderModel.from_pretrained(model_dir).to(device)
+    model = VisionEncoderDecoderModel.from_pretrained(model_dir).to(device)
 
+    # 2) Подготавливаем пиксели
     image = Image.open(img_path).convert("RGB")
-    pixel_values = processor.feature_extractor(
-        images=image, return_tensors="pt"
+    pixel_values = processor.image_processor(
+        images=image,
+        return_tensors="pt"
     ).pixel_values.to(device)
 
-    cls_id = processor.tokenizer.cls_token_id
-    decoder_input_ids = torch.tensor([[cls_id]], device=device)
+    # 3) Стартовый ID для декодера — bos_token_id, а не cls_token_id
+    bos_id = processor.tokenizer.bos_token_id
+    decoder_input_ids = torch.tensor([[bos_id]], device=device)
 
+    # 4) Генерируем
     generated_ids = model.generate(
         pixel_values=pixel_values,
         decoder_input_ids=decoder_input_ids,
@@ -31,22 +36,17 @@ def main(model_dir: str, img_path: str) -> None:
         use_cache=True,
     )
 
-    raw_pred = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+    # 5) Декодируем И сразу пропускаем специальные токены
+    #    это уберёт все <s>, </s>, <pad> и пр.
+    raw = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
 
-    cls_tok = processor.tokenizer.cls_token or ""
-    eos_tok = processor.tokenizer.eos_token or ""
-    if raw_pred.startswith(cls_tok):
-        raw_pred = raw_pred[len(cls_tok):]
-    raw_pred = raw_pred.replace(eos_tok, "").strip()
-
+    # 6) Пытаемся распарсить JSON
     try:
-        result = json.loads(raw_pred)
+        result = json.loads(raw)
     except json.JSONDecodeError:
-        result = {"error": "failed to parse", "raw": raw_pred}
+        result = {"error": "failed to parse", "raw": raw}
 
-    # 8) Выводим красиво
     print(json.dumps(result, ensure_ascii=False, indent=2))
-
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
