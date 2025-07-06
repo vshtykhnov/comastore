@@ -21,7 +21,7 @@ class DonutDataset(Dataset):
         images_dir: str | Path,
         gt_dir: str | Path,
         processor: DonutProcessor,
-        max_length: int = 128,
+        max_length: int = 512,
     ) -> None:
         self.images = sorted(Path(images_dir).glob("*"))
         self.gts: Dict[str, Path] = {p.stem: p for p in Path(gt_dir).glob("*.json*")}
@@ -32,46 +32,26 @@ class DonutDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        # Load image and ground truth JSON
+        # Load image and JSON
         img_path = self.images[idx]
         gt = json.loads(Path(self.gts[img_path.stem]).read_text(encoding="utf-8"))
 
-        # Build text prompt with special tokens
-        tokenizer = self.processor.tokenizer
-        cls_token = tokenizer.cls_token or ""
-        eos_token = tokenizer.eos_token or ""
-        text = cls_token + json.dumps(gt, ensure_ascii=False) + eos_token
-
-        # Process image for encoder
+        # Prepare input via processor: handles special tokens
         image = Image.open(img_path).convert("RGB")
-        pixel_values = self.processor.feature_extractor(
-            images=image, return_tensors="pt"
-        ).pixel_values.squeeze(0)
-
-        # Tokenize text for decoder labels
-        tokenized = tokenizer(
-            text,
+        enc = self.processor(
+            images=image,
+            text=json.dumps(gt, ensure_ascii=False),
             return_tensors="pt",
             padding="max_length",
             truncation=True,
             max_length=self.max_length,
         )
-        labels = tokenized.input_ids.squeeze(0)
 
-        # Optional debug: print full decoded tokens
-        print("Decoded labels:", tokenizer.decode(labels, skip_special_tokens=False))
-        print(f"Pixel values shape: {pixel_values.shape}, Labels shape: {labels.shape}")
-        print(tokenizer.decode(labels, skip_special_tokens=False))
+        # enc contains pixel_values and input_ids as labels
+        pixel_values = enc.pixel_values.squeeze(0)
+        labels = enc.input_ids.squeeze(0)
 
         return {"pixel_values": pixel_values, "labels": labels}
-
-
-def collate_fn(batch, pad_token_id: int):
-    """Stack and mask padding tokens for labels."""
-    pixel_values = torch.stack([b["pixel_values"] for b in batch])
-    labels = torch.stack([b["labels"] for b in batch])
-    labels = labels.masked_fill(labels == pad_token_id, -100)
-    return {"pixel_values": pixel_values, "labels": labels}
 
 
 def main() -> None:
@@ -81,8 +61,6 @@ def main() -> None:
     val_gts = "donut_dataset/ground_truth/val"
     output_dir = "donut_finetuned"
     model_name = "naver-clova-ix/donut-base"
-    max_epochs = 7
-    lr = 1e-5
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -91,16 +69,14 @@ def main() -> None:
     processor.tokenizer.model_max_length = 512
 
     model = VisionEncoderDecoderModel.from_pretrained(model_name).to(device)
-    model.config.decoder_start_token_id = processor.tokenizer.cls_token_id
+    model.config.decoder_start_token_id = processor.tokenizer.bos_token_id
     model.config.pad_token_id = processor.tokenizer.pad_token_id
     model.config.eos_token_id = processor.tokenizer.eos_token_id
     model.gradient_checkpointing_enable()
 
-    # Prepare datasets
+    # Create datasets
     train_ds = DonutDataset(train_images, train_gts, processor)
     val_ds = DonutDataset(val_images, val_gts, processor)
-
-    pad_token_id = processor.tokenizer.pad_token_id
 
     # Training arguments
     training_args = Seq2SeqTrainingArguments(
@@ -117,11 +93,23 @@ def main() -> None:
         greater_is_better=False,
         generation_max_length=512,
         generation_num_beams=5,
-        learning_rate=lr,
-        num_train_epochs=max_epochs,
+        learning_rate=1e-5,
+        num_train_epochs=7,
         fp16=torch.cuda.is_available(),
         remove_unused_columns=False,
     )
+
+    # Data collator masks pad tokens
+    pad_token_id = processor.tokenizer.pad_token_id
+    def collate_fn(batch):
+        pixel_values = torch.stack([b["pixel_values"] for b in batch])
+        labels = torch.stack([b["labels"] for b in batch])
+        labels = labels.masked_fill(labels == pad_token_id, -100)
+
+        print("Decoded labels:", processor.tokenizer.decode(labels, skip_special_tokens=False))
+        print(f"Pixel values shape: {pixel_values.shape}, Labels shape: {labels.shape}")
+        print(processor.tokenizer.decode(labels, skip_special_tokens=False))
+        return {"pixel_values": pixel_values, "labels": labels}
 
     torch.cuda.empty_cache()
 
@@ -130,14 +118,13 @@ def main() -> None:
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        data_collator=lambda b: collate_fn(b, pad_token_id),
+        data_collator=collate_fn,
         tokenizer=processor.tokenizer,
     )
 
     trainer.train()
     trainer.save_model(output_dir)
     processor.save_pretrained(output_dir)
-
 
 if __name__ == "__main__":
     main()
