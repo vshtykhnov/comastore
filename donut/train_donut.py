@@ -57,7 +57,9 @@ class DonutDataset(Dataset):
                 # Debug shapes:
         print(f"Pixel values: {pixel_values.shape}, Labels: {labels.shape}")
         # Decode labels for sanity:
-        print("Decoded label sample:", self.processor.tokenizer.decode(labels, skip_special_tokens=True))
+        print("Decoded label sample (without specials):", self.processor.tokenizer.decode(labels, skip_special_tokens=True))
+        # Also print raw tokens including special tokens:
+        print("Decoded label sample (raw):", self.processor.tokenizer.decode(labels, skip_special_tokens=False))
         return {"pixel_values": pixel_values, "labels": labels}
 
 
