@@ -89,8 +89,10 @@ def main() -> None:
         gradient_accumulation_steps=4,
         per_device_eval_batch_size=1,
         predict_with_generate=True,
-        evaluation_strategy="epoch",
-        save_strategy="epoch",
+        evaluation_strategy="steps",
+        eval_steps=100,
+        save_strategy="steps",
+        save_steps=100,
         logging_steps=100,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
@@ -98,9 +100,12 @@ def main() -> None:
         generation_max_length=512,
         generation_num_beams=5,
         learning_rate=3e-6,
-        num_train_epochs=10,
+        num_train_epochs=30,
+        lr_scheduler_type="constant_with_warmup",
+        warmup_steps=10,
         fp16=torch.cuda.is_available(),
         remove_unused_columns=False,
+        max_steps=1000,
     )
 
     # Data collator masks pad tokens
@@ -122,6 +127,7 @@ def main() -> None:
         tokenizer=processor.tokenizer,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=2)],
     )
+    print("Scheduler:", training_args.lr_scheduler_type)
 
     trainer.train()
     trainer.save_model(output_dir)
