@@ -59,7 +59,9 @@ class DonutDataset(Dataset):
         labels = tokenized.input_ids.squeeze(0)
 
         # Optional debug: print full decoded tokens
-        # print(tokenizer.decode(labels, skip_special_tokens=False))
+        print("Decoded labels:", tokenizer.decode(labels, skip_special_tokens=False))
+        print(f"Pixel values shape: {pixel_values.shape}, Labels shape: {labels.shape}")
+        print(tokenizer.decode(labels, skip_special_tokens=False))
 
         return {"pixel_values": pixel_values, "labels": labels}
 
