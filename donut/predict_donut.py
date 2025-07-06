@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run inference with a fine-tuned Donut model."""
+"""Run inference с детальным логом предикта."""
 import sys
 import json
 from PIL import Image
@@ -9,23 +9,22 @@ from transformers import DonutProcessor, VisionEncoderDecoderModel
 def main(model_dir: str, img_path: str) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # 1) Загружаем processor и модель
     processor = DonutProcessor.from_pretrained(model_dir, use_fast=True)
-    model = VisionEncoderDecoderModel.from_pretrained(model_dir).to(device)
+    model     = VisionEncoderDecoderModel.from_pretrained(model_dir).to(device)
 
-    # 2) Подготавливаем пиксели
+    # 1) Подготовка изображения
     image = Image.open(img_path).convert("RGB")
     pixel_values = processor.image_processor(
         images=image,
         return_tensors="pt"
     ).pixel_values.to(device)
 
-    # 3) Стартовый ID для декодера — bos_token_id, а не cls_token_id
+    # 2) Стартовые токены
     bos_id = processor.tokenizer.bos_token_id
     decoder_input_ids = torch.tensor([[bos_id]], device=device)
 
-    # 4) Генерируем
-    generated_ids = model.generate(
+    # 3) Генерация
+    generated = model.generate(
         pixel_values=pixel_values,
         decoder_input_ids=decoder_input_ids,
         max_length=processor.tokenizer.model_max_length,
@@ -36,17 +35,25 @@ def main(model_dir: str, img_path: str) -> None:
         use_cache=True,
     )
 
-    # 5) Декодируем И сразу пропускаем специальные токены
-    #    это уберёт все <s>, </s>, <pad> и пр.
-    raw = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+    # 4) Debug: распечатаем сами ID и raw-декод
+    print(">>> Generated token IDs:", generated.tolist())
+    raw_pred = processor.batch_decode(generated, skip_special_tokens=False)[0]
+    print(">>> Raw prediction (with all specials):")
+    print(repr(raw_pred))
 
-    # 6) Пытаемся распарсить JSON
+    # 5) Отчистка от специальных токенов
+    pred = processor.batch_decode(generated, skip_special_tokens=True)[0].strip()
+    print(">>> Clean prediction (skip_special_tokens=True):")
+    print(repr(pred))
+
+    # 6) Пытаемся спарсить
     try:
-        result = json.loads(raw)
+        result = json.loads(pred)
     except json.JSONDecodeError:
-        result = {"error": "failed to parse", "raw": raw}
+        result = {"error": "failed to parse", "raw": pred}
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
