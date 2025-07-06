@@ -38,6 +38,9 @@ class DonutDataset(Dataset):
 
         # Process image and text together
         image = Image.open(img_path).convert("RGB")
+        # Debug prints:
+        print(f"Processing {img_path.name}")
+        # Processor returns both pixel_values and labels tensors
         enc = self.processor(
             images=image,
             text=json.dumps(gt, ensure_ascii=False),
@@ -51,6 +54,10 @@ class DonutDataset(Dataset):
         pixel_values = enc.pixel_values.squeeze(0)
         labels = enc.labels.squeeze(0)
 
+                # Debug shapes:
+        print(f"Pixel values: {pixel_values.shape}, Labels: {labels.shape}")
+        # Decode labels for sanity:
+        print("Decoded label sample:", self.processor.tokenizer.decode(labels, skip_special_tokens=True))
         return {"pixel_values": pixel_values, "labels": labels}
 
 
