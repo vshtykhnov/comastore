@@ -36,7 +36,7 @@ class DonutDataset(Dataset):
         img_path = self.images[idx]
         gt = json.loads(Path(self.gts[img_path.stem]).read_text(encoding="utf-8"))
 
-        # Prepare input via processor: handles special tokens
+        # Process image and text together
         image = Image.open(img_path).convert("RGB")
         enc = self.processor(
             images=image,
@@ -47,9 +47,9 @@ class DonutDataset(Dataset):
             max_length=self.max_length,
         )
 
-        # enc contains pixel_values and input_ids as labels
+        # Extract pixel values and labels (not input_ids)
         pixel_values = enc.pixel_values.squeeze(0)
-        labels = enc.input_ids.squeeze(0)
+        labels = enc.labels.squeeze(0)
 
         return {"pixel_values": pixel_values, "labels": labels}
 
@@ -74,7 +74,7 @@ def main() -> None:
     model.config.eos_token_id = processor.tokenizer.eos_token_id
     model.gradient_checkpointing_enable()
 
-    # Create datasets
+    # Prepare datasets
     train_ds = DonutDataset(train_images, train_gts, processor)
     val_ds = DonutDataset(val_images, val_gts, processor)
 
@@ -105,10 +105,6 @@ def main() -> None:
         pixel_values = torch.stack([b["pixel_values"] for b in batch])
         labels = torch.stack([b["labels"] for b in batch])
         labels = labels.masked_fill(labels == pad_token_id, -100)
-
-        print("Decoded labels:", processor.tokenizer.decode(labels, skip_special_tokens=False))
-        print(f"Pixel values shape: {pixel_values.shape}, Labels shape: {labels.shape}")
-        print(processor.tokenizer.decode(labels, skip_special_tokens=False))
         return {"pixel_values": pixel_values, "labels": labels}
 
     torch.cuda.empty_cache()
