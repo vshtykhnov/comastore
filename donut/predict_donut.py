@@ -6,8 +6,6 @@ from PIL import Image
 import torch
 from transformers import DonutProcessor, VisionEncoderDecoderModel
 
-TASK_PROMPT = "<s_serialize>"
-
 def main(model_dir: str, img_path: str) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -18,34 +16,38 @@ def main(model_dir: str, img_path: str) -> None:
     # 2) Читаем и конвертим изображение
     image = Image.open(img_path).convert("RGB")
 
-    # 3) Готовим входы точно так же, как при обучении:
-    #    передаём и картинку, и префикс TASK_PROMPT
-    inputs = processor(
+    # 3) Обрабатываем КАРТИНКУ только через feature_extractor
+    enc = processor.feature_extractor(
         images=image,
-        text=TASK_PROMPT,
         return_tensors="pt"
-    ).to(device)
+    )
+    pixel_values = enc.pixel_values.to(device)
 
-    # 4) Генерируем
+    # 4) Инициализируем декодер одним BOS-токеном
+    bos_id = processor.tokenizer.bos_token_id
+    decoder_input_ids = torch.tensor([[bos_id]], device=device)
+
+    # 5) Генерируем вывода
     generated_ids = model.generate(
-        **inputs,
+        pixel_values=pixel_values,
+        decoder_input_ids=decoder_input_ids,
         max_length=processor.tokenizer.model_max_length,
         num_beams=5,
         early_stopping=True,
-        use_cache=True,
         eos_token_id=processor.tokenizer.eos_token_id,
         pad_token_id=processor.tokenizer.pad_token_id,
+        use_cache=False,  # рекомендуем False при gradient checkpointing
     )
 
-    # 5) Декодируем — сначала с keep_special, чтобы увидеть, что модель реально генерит
+    # 6) Декодируем сначала со всеми спецто�енами
     raw = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
     print(">>> raw with specials:", repr(raw))
 
-    # 6) А потом без спецтокенов
+    # 7) А потом «чистый» вариант без спецтокенов
     cleaned = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
     print(">>> without specials:", repr(cleaned))
 
-    # 7) Парсим JSON
+    # 8) Парсим JSON
     try:
         output = json.loads(cleaned)
     except json.JSONDecodeError:
