@@ -7,25 +7,39 @@ from PIL import Image
 import torch
 from transformers import DonutProcessor, VisionEncoderDecoderModel
 
-
 def main(model_dir: str, img_path: str) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    processor = DonutProcessor.from_pretrained(model_dir)
-    model = VisionEncoderDecoderModel.from_pretrained(model_dir).to(device)
+
+    processor = DonutProcessor.from_pretrained(model_dir, use_fast=True)
+    model     = VisionEncoderDecoderModel.from_pretrained(model_dir).to(device)
 
     image = Image.open(img_path).convert("RGB")
-    inputs = processor(images=image, return_tensors="pt").to(device)
+    pixel_values = processor.feature_extractor(
+        images=image,
+        return_tensors="pt"
+    ).pixel_values.to(device)
+
+    cls_token_id = processor.tokenizer.cls_token_id
+    decoder_input_ids = torch.tensor([[cls_token_id]], device=device)
 
     generated_ids = model.generate(
-        **inputs,
-        max_length=512,
+        pixel_values=pixel_values,
+        decoder_input_ids=decoder_input_ids,
+        max_length=processor.tokenizer.model_max_length,
         num_beams=5,
         early_stopping=True,
-        use_cache=False,
+        eos_token_id=processor.tokenizer.eos_token_id,
+        pad_token_id=processor.tokenizer.pad_token_id,
+        use_cache=True,
     )
-    pred = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+    pred = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+
+    if pred.startswith(processor.tokenizer.cls_token):
+        pred = pred[len(processor.tokenizer.cls_token):]
+    pred = pred.replace(processor.tokenizer.eos_token, "").strip()
+
     try:
-        print(pred, "prediction")
         result = json.loads(pred)
     except json.JSONDecodeError:
         result = {"error": "failed to parse", "raw": pred}
@@ -36,5 +50,5 @@ def main(model_dir: str, img_path: str) -> None:
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("Usage: python predict_donut.py <model_dir> <image_path>")
-        raise SystemExit(1)
+        sys.exit(1)
     main(sys.argv[1], sys.argv[2])
