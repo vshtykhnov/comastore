@@ -1,58 +1,57 @@
 #!/usr/bin/env python
-"""Run inference с детальным логом предикта."""
+"""Run inference with a fine-tuned Donut model."""
 import sys
 import json
 from PIL import Image
 import torch
 from transformers import DonutProcessor, VisionEncoderDecoderModel
 
+TASK_PROMPT = "<s_serialize>"
+
 def main(model_dir: str, img_path: str) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    # 1) Загрузка процессора и модели
     processor = DonutProcessor.from_pretrained(model_dir, use_fast=True)
     model     = VisionEncoderDecoderModel.from_pretrained(model_dir).to(device)
 
-    # 1) Подготовка изображения
+    # 2) Читаем и конвертим изображение
     image = Image.open(img_path).convert("RGB")
-    pixel_values = processor.image_processor(
+
+    # 3) Готовим входы точно так же, как при обучении:
+    #    передаём и картинку, и префикс TASK_PROMPT
+    inputs = processor(
         images=image,
+        text=TASK_PROMPT,
         return_tensors="pt"
-    ).pixel_values.to(device)
+    ).to(device)
 
-    # 2) Стартовые токены
-    bos_id = processor.tokenizer.bos_token_id
-    decoder_input_ids = torch.tensor([[bos_id]], device=device)
-
-    # 3) Генерация
-    generated = model.generate(
-        pixel_values=pixel_values,
-        decoder_input_ids=decoder_input_ids,
+    # 4) Генерируем
+    generated_ids = model.generate(
+        **inputs,
         max_length=processor.tokenizer.model_max_length,
         num_beams=5,
         early_stopping=True,
+        use_cache=True,
         eos_token_id=processor.tokenizer.eos_token_id,
         pad_token_id=processor.tokenizer.pad_token_id,
-        use_cache=True,
     )
 
-    # 4) Debug: распечатаем сами ID и raw-декод
-    print(">>> Generated token IDs:", generated.tolist())
-    raw_pred = processor.batch_decode(generated, skip_special_tokens=False)[0]
-    print(">>> Raw prediction (with all specials):")
-    print(repr(raw_pred))
+    # 5) Декодируем — сначала с keep_special, чтобы увидеть, что модель реально генерит
+    raw = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+    print(">>> raw with specials:", repr(raw))
 
-    # 5) Отчистка от специальных токенов
-    pred = processor.batch_decode(generated, skip_special_tokens=True)[0].strip()
-    print(">>> Clean prediction (skip_special_tokens=True):")
-    print(repr(pred))
+    # 6) А потом без спецтокенов
+    cleaned = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+    print(">>> without specials:", repr(cleaned))
 
-    # 6) Пытаемся спарсить
+    # 7) Парсим JSON
     try:
-        result = json.loads(pred)
+        output = json.loads(cleaned)
     except json.JSONDecodeError:
-        result = {"error": "failed to parse", "raw": pred}
+        output = {"error": "failed to parse", "raw": cleaned}
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
